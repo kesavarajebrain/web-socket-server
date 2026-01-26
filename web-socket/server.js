@@ -1,28 +1,41 @@
-const WebSocket = require('ws');
-const crypto = require('crypto');
+const WebSocket = require("ws");
+const crypto = require("crypto");
+const http = require("http");
 
-const wss = new WebSocket.Server({ port: 8080 });
+const PORT = process.env.PORT || 8080;
 
-console.log('✅ WS Chat Server running on ws://localhost:8080');
+// Create HTTP server
+const server = http.createServer((req, res) => {
+  if (req.url === "/health") {
+    res.writeHead(200);
+    res.end("OK");
+  } else {
+    res.writeHead(200);
+    res.end("WebSocket server running 🚀");
+  }
+});
 
-wss.on('connection', socket => {
+// Attach WebSocket to HTTP server
+const wss = new WebSocket.Server({ server });
 
-  socket.on('message', data => {
+server.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
 
+wss.on("connection", socket => {
+  socket.on("message", data => {
     const payload = JSON.parse(data.toString());
 
-    // Add id + timestamp for messages
-    if (payload.type === 'message') {
+    if (payload.type === "message") {
       payload.id = crypto.randomUUID();
       payload.timestamp = Date.now();
     }
 
-    // Broadcast EVERYTHING
+    // Broadcast to everyone
     wss.clients.forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify(payload));
       }
     });
   });
-
 });
