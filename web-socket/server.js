@@ -26,24 +26,33 @@ const users = [
 ];
 
 app.post("/login", (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-  const { email, password } = req.body;
+    const user = users.find(
+      u => u.email === email && u.password === password
+    );
 
-  const user = users.find(
-    u => u.email === email && u.password === password
-  );
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
-  if (!user) {
-    return res.status(401).json({ message: "Invalid credentials" });
+    if (!JWT_SECRET) {
+      throw new Error("JWT_SECRET is missing in environment variables");
+    }
+
+    const token = jwt.sign(
+      { sub: user.id, role: user.role },
+      JWT_SECRET,
+      { expiresIn: "2m" }
+    );
+
+    res.json({ data: user, accessToken: token });
+
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ message: "Server error" });
   }
-
-  const token = jwt.sign(
-    { sub: user.id, role: user.role },
-    JWT_SECRET,
-    { expiresIn: "2m" }
-  );
-
-  res.json({ data: user, accessToken: token });
 });
 
 // JWT middleware
