@@ -8,6 +8,8 @@ const cors = require("cors");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+// store refresh tokens (in production → DB or Redis)
+let refreshTokens = [];
 
 // Middleware
 app.use(cors());
@@ -41,13 +43,27 @@ app.post("/login", (req, res) => {
       throw new Error("JWT_SECRET is missing in environment variables");
     }
 
-    const token = jwt.sign(
+    // ACCESS TOKEN
+    const accessToken = jwt.sign(
       { sub: user.id, role: user.role },
       JWT_SECRET,
       { expiresIn: "2m" }
     );
 
-    res.json({ data: user, accessToken: token });
+    // REFRESH TOKEN (random string)
+    const refreshToken = crypto.randomUUID();
+
+    // store refresh token
+    refreshTokens.push({
+      token: refreshToken,
+      userId: user.id
+    });
+
+    res.json({
+      data: user,
+      accessToken,
+      refreshToken
+    });
 
   } catch (err) {
     console.error("LOGIN ERROR:", err);
@@ -85,6 +101,62 @@ app.get("/profile", authenticateToken, (req, res) => {
 
 app.get("/public", (req, res) => {
   res.json({ message: "Anyone can access this" });
+});
+
+app.post("/refresh", (req, res) => {
+
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: "Refresh token missing" });
+  }
+
+  const storedToken = refreshTokens.find(t => t.token === refreshToken);
+console.log("Body:", req.body);
+console.log("Token from client:", refreshToken);
+console.log("Stored tokens:", refreshTokens);
+
+  if (!storedToken) {
+    return res.status(403).json({ message: "Invalid refresh token" });
+  }
+
+  const user = users.find(u => u.id === storedToken.userId);
+
+  if (!user) {
+    return res.status(403).json({ message: "User not found" });
+  }
+
+  const newAccessToken = jwt.sign(
+    { sub: user.id, role: user.role },
+    JWT_SECRET,
+    { expiresIn: "2m" }
+  );
+
+  res.json({
+    accessToken: newAccessToken
+  });
+
+});
+
+app.post("/logout", (req, res) => {
+console.log('BODY',req.body)
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(400).json({
+      message: "Refresh token required"
+    });
+  }
+
+  // remove refresh token from storage
+  refreshTokens = refreshTokens.filter(
+    tokenObj => tokenObj.token !== refreshToken
+  );
+
+  res.json({
+    message: "Logged out successfully"
+  });
+
 });
 
 // ---------------- CREATE HTTP SERVER ----------------
